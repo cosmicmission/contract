@@ -1,8 +1,4 @@
-/**
- *Submitted for verification at BscScan.com on 2022-02-22
-*/
-
-pragma solidity ^0.5.0;
+pragma solidity 0.5.17;
 
 interface IERC20 {
     function totalSupply() external view returns (uint256);
@@ -60,37 +56,33 @@ contract ERC20 is IERC20 {
     mapping (address => mapping (address => uint256)) private _allowances;
 
     uint256 private _totalSupply;
-    
     address internal root = msg.sender;
-    modifier onlyOwner() {
-        require(msg.sender == root);
-        _;
-    }
 
     uint public contractBlock = block.number; 
-    uint internal monBlock = 20*60*24*30;
-    uint internal yearBlock = 20*60*24*30*12;
+    uint constant internal monBlock = 20*60*24*30;
+    uint constant internal yearBlock = monBlock*12;
     uint public nextMechanismBlock = contractBlock.add(monBlock.mul(3));
     uint public nextMiningBlock = 0;
     uint public mechanismCount = 36;
     uint public miningCount = 5;
-    uint256 public miningLock = 37500000*10**6;
-    uint256 public mechanismLock = 7500000*10**6;
-    uint256 public TotalLock = 45000000*10**6;
-    uint256 internal mechanismAmount = 208333*10**6;
-    uint256 internal miningAmount = 7500000*10**6;
-    
-    address internal pool = address(0x063c2069330945a20b05fEaaa3D39120A4b04bC8);
-    address internal mining = address(0xF27790c6d2E8FE3AD064620a4974CAA1c4755Ef0);
-    address internal whiteList = address(0xDe6453b9b49CE3A0Abe91261753c30f46130C68C);
-    address internal dao = address(0xC20ab3F2E20C8F6405366995aE877C53a829fCb8);
-    address internal mechanism = address(0x25e6478d9B1F7ABf1D56F11025CF4CB78be1dA4A);
+    uint256 public miningLock = 3750e22;
+    uint256 public mechanismLock = 750e22;
+    uint256 public TotalLock = 4500e22;
+    uint256 constant internal mechanismAmount = 208333e18;
+    uint256 constant internal miningAmount = 750e22;
+    address constant internal pool = address(0x063c2069330945a20b05fEaaa3D39120A4b04bC8);
+    address constant internal mining = address(0xF27790c6d2E8FE3AD064620a4974CAA1c4755Ef0);
+    address constant internal whiteList = address(0xDe6453b9b49CE3A0Abe91261753c30f46130C68C);
+    address constant internal dao = address(0xC20ab3F2E20C8F6405366995aE877C53a829fCb8);
+    address constant internal mechanism = address(0x25e6478d9B1F7ABf1D56F11025CF4CB78be1dA4A);
 
     function unlockMechanism() internal{
-        require(mechanismLock > 0 , "ERC20: mining pool empty");
-        uint256 amount = mechanismAmount;
+        require(mechanismLock > 0 , "BEP20: mining pool empty");
 
-        if(mechanismLock<amount) amount = mechanismAmount;
+        uint256 amount = 0;
+        if(mechanismCount==1) amount = mechanismLock;
+        else amount = mechanismAmount;
+
         _balances[root] = _balances[root].sub(amount);
         mechanismCount -=1;
         nextMechanismBlock = block.number.add(monBlock);
@@ -100,8 +92,7 @@ contract ERC20 is IERC20 {
         emit Transfer(root, mechanism, amount);
     }
     function unlockMining () internal {
-        require(miningCount > 0 , "ERC20: not count");
-        require(miningLock > 0 , "ERC20: mining pool empty");
+        require(miningLock > 0 , "BEP20: mining pool empty");
 
         uint256 amount = miningAmount;
         if(miningLock<amount) amount = miningLock;
@@ -115,36 +106,41 @@ contract ERC20 is IERC20 {
         emit Transfer(root, mining, amount);
     }
     function _transfer(address sender, address recipient, uint256 amount) internal {
-        require(sender != address(0), "ERC20: transfer from the zero address");
-        require(recipient != address(0), "ERC20: transfer to the zero address");
+        require(sender != address(0), "BEP20: transfer from the zero address");
+        require(recipient != address(0), "BEP20: transfer to the zero address");
 
         if(block.number>=nextMiningBlock && miningCount>0) unlockMining();
         if(block.number>=nextMechanismBlock && mechanismCount>0) unlockMechanism();
+        uint256 receiveAmount = amount;
 
         if(sender!=root){
-            if (_totalSupply > 20000000*10**6 ){
-                uint256 delta = _totalSupply.sub(20000000*10**6);
+            if (_totalSupply > 2000e22 ){
+                uint256 delta = _totalSupply.sub(2000e22);
                 uint256 burn_amount = amount.mul(5).div(100);
-                uint256 _pool = amount.mul(2).div(100);
-                uint256 _pool2 = burn_amount.sub(_pool);
 
                 if (delta > burn_amount){
+                    uint256 _pool = amount.mul(2).div(100);
+                    uint256 _pool2 = burn_amount.sub(_pool);
                     _totalSupply = _totalSupply.sub(_pool2);
                     _balances[pool] = _balances[pool].add(_pool);
                     emit Transfer(sender, pool, _pool);
+                    receiveAmount = amount.sub(burn_amount);
                 }else{
-                    _totalSupply = 20000000*10**6;
-                    amount = amount.sub(delta);
+                    _totalSupply = 2000e22;
+                    receiveAmount = amount.sub(delta);
                 }
-                
             }
         }else{
             uint256 activeNum = _balances[sender].sub(TotalLock);
-            if(amount>activeNum) amount = activeNum;
+            require(activeNum>0,"BEP20: not count");
+            if(amount>activeNum) {
+                amount = activeNum; 
+                receiveAmount=activeNum;
+            }
         }
 
         _balances[sender] = _balances[sender].sub(amount);
-        _balances[recipient] = _balances[recipient].add(amount);
+        _balances[recipient] = _balances[recipient].add(receiveAmount);
         emit Transfer(sender, recipient, amount);
     }
 
@@ -180,17 +176,16 @@ contract ERC20 is IERC20 {
     }
     
     function _mint(address account, uint256 amount) internal {
-        require(account != address(0), "ERC20: mint to the zero address");
-        _totalSupply = _totalSupply.add(amount);
-
-        _balances[account] = _balances[account].add(amount);
-        _transfer(account,whiteList,2500000*10**6);
-        _transfer(account,dao,2500000*10**6);
+        require(account != address(0), "BEP20: mint to the zero address");
+        _totalSupply = amount;
+        _balances[account] = _totalSupply;
+        _transfer(account,whiteList,250e22);
+        _transfer(account,dao,250e22);
         emit Transfer(address(0), account, amount);
     }
     function _approve(address owner, address spender, uint256 value) internal {
-        require(owner != address(0), "ERC20: approve from the zero address");
-        require(spender != address(0), "ERC20: approve to the zero address");
+        require(owner != address(0), "BEP20: approve from the zero address");
+        require(spender != address(0), "BEP20: approve to the zero address");
 
         _allowances[owner][spender] = value;
         emit Approval(owner, spender, value);
@@ -218,7 +213,7 @@ contract ERC20Detailed is IERC20 {
 }
 
 contract Token is ERC20, ERC20Detailed {
-    constructor () public ERC20Detailed("COSMIC MISSION", "CM", 6) {
-        _mint(msg.sender, 50000000 * (10 ** uint256(decimals())));
+    constructor () public ERC20Detailed("COSMIC MISSION", "CM", 18) {
+        _mint(msg.sender, 5e7 * (10 ** uint256(decimals())));
     }
 }
